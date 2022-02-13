@@ -54,6 +54,10 @@ public final class SerialPort
 	static private final String tmpdirAppIdProperty = "fazecast.jSerialComm.appid";
 	static private volatile boolean isAndroid = false;
 	static private volatile boolean isWindows = false;
+	/**
+	 * See https://stackoverflow.com/questions/442564/avoid-synchronizedthis-in-java for pros and cons
+	 */
+	private final Object lock = new Object();
 	static
 	{
 		// Determine the temporary file directory for Java and remove any previous versions of this library
@@ -582,8 +586,9 @@ public final class SerialPort
 	 * @param deviceReceiveQueueSize The requested size in bytes of the internal device driver's input queue (no effect on Linux/OSX)
 	 * @return Whether the port was successfully opened with a valid configuration.
 	 */
-	public final synchronized boolean openPort(int safetySleepTime, int deviceSendQueueSize, int deviceReceiveQueueSize)
+	public final boolean openPort(int safetySleepTime, int deviceSendQueueSize, int deviceReceiveQueueSize)
 	{
+		synchronized (lock) {
 		// Synchronize this method to the class scope as well
         synchronized (SerialPort.class)
         {
@@ -593,11 +598,11 @@ public final class SerialPort
 			receiveDeviceQueueSize = (deviceReceiveQueueSize > 0) ? deviceReceiveQueueSize : receiveDeviceQueueSize;
 			if (portHandle != 0)
 				return configPort(portHandle);
-	
+
 			// Force a sleep to ensure that the port does not become unusable due to rapid closing/opening on the part of the user
 			if (safetySleepTimeMS > 0)
 				try { Thread.sleep(safetySleepTimeMS); } catch (Exception e) { Thread.currentThread().interrupt(); }
-	
+
 			// If this is an Android root application, we must explicitly allow serial port access to the library
 			File portFile = isAndroid ? new File(comPort) : null;
 			if (portFile != null && (!portFile.canRead() || !portFile.canWrite()))
@@ -629,7 +634,7 @@ public final class SerialPort
 					try { Thread.sleep(500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); return false; }
 				}
 			}
-	
+
 			// Open the serial port and start an event-based listener if registered
 			if ((portHandle = openPortNative()) != 0)
 			{
@@ -638,6 +643,7 @@ public final class SerialPort
 			}
 			return (portHandle != 0);
         }
+		}
 	}
 
 	/**
@@ -682,8 +688,9 @@ public final class SerialPort
 	 *
 	 * @return Whether the port was successfully closed.
 	 */
-	public final synchronized boolean closePort()
+	public final boolean closePort()
 	{
+		synchronized (lock) {
 		// Synchronize this method to the class scope as well
         synchronized (SerialPort.class)
         {
@@ -693,6 +700,7 @@ public final class SerialPort
 				portHandle = closePortNative(portHandle);
 			return (portHandle == 0);
         }
+		}
 	}
 
 	/**
@@ -700,7 +708,11 @@ public final class SerialPort
 	 *
 	 * @return Whether the port is opened.
 	 */
-	public final synchronized boolean isOpen() { return (portHandle != 0); }
+	public final boolean isOpen() {
+		synchronized (lock) {
+			return (portHandle != 0);
+		}
+	}
 
 	/**
 	 * Disables the library from calling any of the underlying device driver configuration methods.
@@ -709,7 +721,11 @@ public final class SerialPort
 	 * with buggy device drivers. In that case, this function <b>must</b> be called before attempting to
 	 * open the port.
 	 */
-	public final synchronized void disablePortConfiguration() { disableConfig = true; }
+	public final void disablePortConfiguration() {
+		synchronized (lock) {
+			disableConfig = true;
+		}
+	}
 
 	/**
 	 * Disables the library from obtaining an exclusive lock on the serial port.
@@ -717,7 +733,11 @@ public final class SerialPort
 	 * This function should never be called except on very specific systems which do not support obtaining
 	 * exclusive locks on system resources.
 	 */
-	public final synchronized void disableExclusiveLock() { disableExclusiveLock = true; }
+	public final void disableExclusiveLock() {
+		synchronized (lock) {
+			disableExclusiveLock = true;
+		}
+	}
 
 	/**
 	 * Allows the library to request elevation of the current user's permissions for use in making certain
@@ -740,7 +760,11 @@ public final class SerialPort
 	 * situations, this function may make it easier for your application to automatically apply these
 	 * necessary changes.
 	 */
-	public final synchronized void allowElevatedPermissionsRequest() { requestElevatedPermissions = true; }
+	public final void allowElevatedPermissionsRequest() {
+		synchronized (lock) {
+			requestElevatedPermissions = true;
+		}
+	}
 
 	/**
 	 * Returns the source code line location of the latest error encountered during execution of
@@ -751,7 +775,11 @@ public final class SerialPort
 	 * 
 	 * @return Source line of latest native code error.
 	 */
-	public final synchronized int getLastErrorLocation() { return getLastErrorLocation(portHandle); }
+	public final int getLastErrorLocation() {
+		synchronized (lock) {
+			return getLastErrorLocation(portHandle);
+		}
+	}
 	
 	/**
 	 * Returns the error number returned by the most recent native source code line that failed execution.
@@ -761,7 +789,11 @@ public final class SerialPort
 	 * 
 	 * @return Error number of the latest native code error.
 	 */
-	public final synchronized int getLastErrorCode() { return getLastErrorCode(portHandle); }
+	public final int getLastErrorCode() {
+		synchronized (lock) {
+			return getLastErrorCode(portHandle);
+		}
+	}
 
 	// Serial Port Setup Methods
 	private static native void initializeLibrary();						// Initializes the JNI code
@@ -1035,8 +1067,9 @@ public final class SerialPort
 	 * @see SerialPortMessageListener
 	 * @see SerialPortMessageListenerWithExceptions
 	 */
-	public final synchronized boolean addDataListener(SerialPortDataListener listener)
+	public final boolean addDataListener(SerialPortDataListener listener)
 	{
+		synchronized (lock) {
 		if (userDataListener != null)
 			return false;
 		userDataListener = listener;
@@ -1054,12 +1087,14 @@ public final class SerialPort
 		}
 		return true;
 	}
+	}
 
 	/**
 	 * Removes the associated {@link SerialPortDataListener} from the serial port interface.
 	 */
-	public final synchronized void removeDataListener()
+	public final void removeDataListener()
 	{
+		synchronized (lock) {
 		eventFlags = 0;
 		if (serialEventListener != null)
 		{
@@ -1069,6 +1104,7 @@ public final class SerialPort
 				configTimeouts(portHandle, timeoutMode, readTimeout, writeTimeout, eventFlags);
 		}
 		userDataListener = null;
+		}
 	}
 
 	/**
@@ -1157,13 +1193,15 @@ public final class SerialPort
 	 * 
 	 * @return Whether the IO buffers were (or will be) successfully flushed.
 	 */
-	public final synchronized boolean flushIOBuffers()
+	public final boolean flushIOBuffers()
 	{
-		autoFlushIOBuffers = true;
+		synchronized (lock) {
+			autoFlushIOBuffers = true;
 
-		if (portHandle != 0)
-			return flushRxTxBuffers(portHandle);
-		return true;
+			if (portHandle != 0)
+				return flushRxTxBuffers(portHandle);
+			return true;
+		}
 	}
 
 	/**
@@ -1232,8 +1270,9 @@ public final class SerialPort
 	 * @see #MARK_PARITY
 	 * @see #SPACE_PARITY
 	 */
-	public final synchronized boolean setComPortParameters(int newBaudRate, int newDataBits, int newStopBits, int newParity, boolean useRS485Mode)
+	public final boolean setComPortParameters(int newBaudRate, int newDataBits, int newStopBits, int newParity, boolean useRS485Mode)
 	{
+		synchronized (lock) {
 		baudRate = newBaudRate;
 		dataBits = newDataBits;
 		stopBits = newStopBits;
@@ -1247,6 +1286,7 @@ public final class SerialPort
 			return configPort(portHandle);
 		}
 		return true;
+		}
 	}
 
 	/**
@@ -1298,8 +1338,9 @@ public final class SerialPort
 	 * @param newWriteTimeout The number of milliseconds of inactivity to tolerate before returning from a {@link #writeBytes(byte[],long)} call (effective only on Windows).
 	 * @return Whether the port configuration is valid or disallowed on this system (only meaningful after the port is already opened).
 	 */
-	public final synchronized boolean setComPortTimeouts(int newTimeoutMode, int newReadTimeout, int newWriteTimeout)
+	public final boolean setComPortTimeouts(int newTimeoutMode, int newReadTimeout, int newWriteTimeout)
 	{
+		synchronized (lock) {
 		timeoutMode = newTimeoutMode;
 		if (isWindows)
 		{
@@ -1318,6 +1359,7 @@ public final class SerialPort
 			return configTimeouts(portHandle, timeoutMode, readTimeout, writeTimeout, eventFlags);
 		}
 		return true;
+		}
 	}
 
 	/**
@@ -1328,8 +1370,9 @@ public final class SerialPort
 	 * @param newBaudRate The desired baud rate for this serial port.
 	 * @return Whether the port configuration is valid or disallowed on this system (only meaningful after the port is already opened).
 	 */
-	public final synchronized boolean setBaudRate(int newBaudRate)
+	public final boolean setBaudRate(int newBaudRate)
 	{
+		synchronized (lock) {
 		baudRate = newBaudRate;
 
 		if (portHandle != 0)
@@ -1339,6 +1382,7 @@ public final class SerialPort
 			return configPort(portHandle);
 		}
 		return true;
+		}
 	}
 
 	/**
@@ -1349,8 +1393,9 @@ public final class SerialPort
 	 * @param newDataBits The desired number of data bits per word.
 	 * @return Whether the port configuration is valid or disallowed on this system (only meaningful after the port is already opened).
 	 */
-	public final synchronized boolean setNumDataBits(int newDataBits)
+	public final boolean setNumDataBits(int newDataBits)
 	{
+		synchronized (lock) {
 		dataBits = newDataBits;
 
 		if (portHandle != 0)
@@ -1360,6 +1405,7 @@ public final class SerialPort
 			return configPort(portHandle);
 		}
 		return true;
+		}
 	}
 
 	/**
@@ -1376,8 +1422,9 @@ public final class SerialPort
 	 * @see #ONE_POINT_FIVE_STOP_BITS
 	 * @see #TWO_STOP_BITS
 	 */
-	public final synchronized boolean setNumStopBits(int newStopBits)
+	public final boolean setNumStopBits(int newStopBits)
 	{
+		synchronized (lock) {
 		stopBits = newStopBits;
 
 		if (portHandle != 0)
@@ -1387,6 +1434,7 @@ public final class SerialPort
 			return configPort(portHandle);
 		}
 		return true;
+		}
 	}
 
 	/**
@@ -1424,8 +1472,9 @@ public final class SerialPort
 	 * @see #FLOW_CONTROL_XONXOFF_IN_ENABLED
 	 * @see #FLOW_CONTROL_XONXOFF_OUT_ENABLED
 	 */
-	public final synchronized boolean setFlowControl(int newFlowControlSettings)
+	public final boolean setFlowControl(int newFlowControlSettings)
 	{
+		synchronized (lock) {
 		flowControl = newFlowControlSettings;
 
 		if (portHandle != 0)
@@ -1435,6 +1484,7 @@ public final class SerialPort
 			return configPort(portHandle);
 		}
 		return true;
+		}
 	}
 
 	/**
@@ -1451,17 +1501,22 @@ public final class SerialPort
 	 * @see #MARK_PARITY
 	 * @see #SPACE_PARITY
 	 */
-	public final synchronized boolean setParity(int newParity)
+	public final boolean setParity(int newParity)
 	{
-		parity = newParity;
+		synchronized (lock) {
+			parity = newParity;
 
-		if (portHandle != 0)
-		{
-			if (safetySleepTimeMS > 0)
-				try { Thread.sleep(safetySleepTimeMS); } catch (Exception e) { Thread.currentThread().interrupt(); }
-			return configPort(portHandle);
+			if (portHandle != 0) {
+				if (safetySleepTimeMS > 0)
+					try {
+						Thread.sleep(safetySleepTimeMS);
+					} catch (Exception e) {
+						Thread.currentThread().interrupt();
+					}
+				return configPort(portHandle);
+			}
+			return true;
 		}
-		return true;
 	}
 
 	/**
@@ -1477,9 +1532,11 @@ public final class SerialPort
 	 * @param delayAfterSendMicroseconds The time to wait after sending the last data bit before disabling transmit mode (effective only on Linux).
 	 * @return Whether the port configuration is valid or disallowed on this system (only meaningful after the port is already opened).
 	 */
-	public final synchronized boolean setRs485ModeParameters(boolean useRS485Mode, boolean rs485RtsActiveHigh, int delayBeforeSendMicroseconds, int delayAfterSendMicroseconds)
+	public final boolean setRs485ModeParameters(boolean useRS485Mode, boolean rs485RtsActiveHigh, int delayBeforeSendMicroseconds, int delayAfterSendMicroseconds)
 	{
+		synchronized (lock) {
 		return setRs485ModeParameters(useRS485Mode, rs485RtsActiveHigh, false, false, delayBeforeSendMicroseconds, delayAfterSendMicroseconds);
+	}
 	}
 
 	/**
@@ -1506,8 +1563,9 @@ public final class SerialPort
 	 * @param delayAfterSendMicroseconds The time to wait after sending the last data bit before disabling transmit mode (effective only on Linux).
 	 * @return Whether the port configuration is valid or disallowed on this system (only meaningful after the port is already opened).
 	 */
-	public final synchronized boolean setRs485ModeParameters(boolean useRS485Mode, boolean rs485RtsActiveHigh, boolean enableTermination, boolean rxDuringTx,int delayBeforeSendMicroseconds, int delayAfterSendMicroseconds)
+	public final boolean setRs485ModeParameters(boolean useRS485Mode, boolean rs485RtsActiveHigh, boolean enableTermination, boolean rxDuringTx,int delayBeforeSendMicroseconds, int delayAfterSendMicroseconds)
 	{
+		synchronized (lock) {
 		rs485Mode = useRS485Mode;
 		rs485ActiveHigh = rs485RtsActiveHigh;
 		rs485EnableTermination = enableTermination;
@@ -1522,6 +1580,7 @@ public final class SerialPort
 			return configPort(portHandle);
 		}
 		return true;
+		}
 	}
 
 	/**
@@ -1535,8 +1594,9 @@ public final class SerialPort
 	 * @param xoffStopCharacter The decimal-based character to use as an XOFF signal.
 	 * @return Whether the port configuration is valid or disallowed on this system (only meaningful after the port is already opened).
 	 */
-	public final synchronized boolean setXonXoffCharacters(byte xonStartCharacter, byte xoffStopCharacter)
+	public final boolean setXonXoffCharacters(byte xonStartCharacter, byte xoffStopCharacter)
 	{
+		synchronized (lock) {
 		xonStartChar = xonStartCharacter;
 		xoffStopChar = xoffStopCharacter;
 
@@ -1547,6 +1607,7 @@ public final class SerialPort
 			return configPort(portHandle);
 		}
 		return true;
+		}
 	}
 
 	/**

@@ -52,6 +52,7 @@ public final class SerialPort
 	// Static initializer loads correct native library for this machine
 	static private final String versionString = "2.9.1";
 	static private final String tmpdirAppIdProperty = "fazecast.jSerialComm.appid";
+	private static final Object GLOBAL_LOCK = new Object();
 	static private volatile boolean isAndroid = false;
 	static private volatile boolean isWindows = false;
 	static
@@ -457,6 +458,18 @@ public final class SerialPort
 	 */
 	static public final synchronized native SerialPort[] getCommPorts();
 
+	static public final native SerialPort[] getUnSynchronizedCommPorts();
+
+	static public final synchronized SerialPort[] getCommPortsNotNative() {
+		System.out.println("getCommPortsNotNative");
+		return null;
+	}
+
+	static public final SerialPort[] getNotNativeUnSynchronizedCommPorts(){
+		System.out.println("getNotNativeUnSynchronizedCommPorts");
+		return null;
+	}
+
 	/**
 	 * Allocates a {@link SerialPort} object corresponding to the user-specified port descriptor.
 	 * <p>
@@ -585,7 +598,7 @@ public final class SerialPort
 	public final synchronized boolean openPort(int safetySleepTime, int deviceSendQueueSize, int deviceReceiveQueueSize)
 	{
 		// Synchronize this method to the class scope as well
-        synchronized (SerialPort.class)
+        synchronized (GLOBAL_LOCK)
         {
 			// Set the send/receive internal buffer sizes, and return true if already opened
 			safetySleepTimeMS = safetySleepTime;
@@ -685,7 +698,7 @@ public final class SerialPort
 	public final synchronized boolean closePort()
 	{
 		// Synchronize this method to the class scope as well
-        synchronized (SerialPort.class)
+        synchronized (GLOBAL_LOCK)
         {
 			if (serialEventListener != null)
 				serialEventListener.stopListening();
